@@ -9,6 +9,8 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- MQTT over WebSockets library -->
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <!-- Chart.js for real-time graphs -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   
   <script>
     tailwind.config = {
@@ -48,6 +50,11 @@
       color: #0f172a;
       box-shadow: 0 0 15px rgba(6, 182, 212, 0.6);
     }
+    /* Speedometer needle smooth transition */
+    #speed-needle {
+      transition: transform 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
+      transform-origin: 100px 100px;
+    }
   </style>
 </head>
 <body class="min-h-screen flex flex-col justify-between font-sans selection:bg-cyan-500 selection:text-slate-900">
@@ -62,7 +69,7 @@
       </div>
       <div>
         <h1 class="text-xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">APEX CONTROLLER</h1>
-        <p class="text-xs font-mono text-cyan-400">ESP32 RC-CAR TELEMETRY CLIENT</p>
+        <p class="text-xs font-mono text-cyan-400">ESP32 telemetry telemetry node</p>
       </div>
     </div>
 
@@ -74,151 +81,209 @@
   </header>
 
   <!-- Main Content -->
-  <main class="flex-grow w-full max-w-7xl mx-auto px-6 py-8 grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch">
+  <main class="flex-grow w-full max-w-7xl mx-auto px-6 py-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch">
     
-    <!-- LEFT PANEL: CONNECTION SETTINGS & CONTROLS -->
-    <div class="space-y-6 flex flex-col justify-between">
-      
-      <!-- Connection Configuration -->
-      <div class="glass-card p-6 rounded-2xl border border-slate-800/80 shadow-xl space-y-4">
-        <h2 class="text-lg font-semibold text-slate-200 flex items-center">
+    <!-- CARD 1: BROKER CONFIGURATION -->
+    <div class="glass-card p-6 rounded-2xl border border-slate-800/80 shadow-xl space-y-4 flex flex-col justify-between">
+      <div>
+        <h2 class="text-base font-semibold text-slate-200 flex items-center mb-4">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071a10.5 10.5 0 0114.142 0M1.398 8.857a16.5 16.5 0 0121.204 0" />
           </svg>
           Broker Configuration
         </h2>
-        <div class="space-y-3 font-mono text-sm">
+        <div class="space-y-3 font-mono text-xs">
           <div>
-            <label class="block text-xs text-slate-500 mb-1">SSID / NETWORK (IN WOKWI)</label>
+            <label class="block text-slate-500 mb-1">SSID (WOKWI NETWORK)</label>
             <input type="text" disabled value="Wokwi-GUEST" class="w-full bg-slate-900/50 border border-slate-800 text-slate-400 rounded-lg px-3 py-2 cursor-not-allowed">
           </div>
           <div>
-            <label class="block text-xs text-slate-500 mb-1">MQTT BROKER (WEBSOCKETS)</label>
+            <label class="block text-slate-500 mb-1">MQTT BROKER HOST</label>
             <input id="broker-host" type="text" value="broker.hivemq.com" class="w-full bg-slate-900/80 border border-slate-700 text-slate-200 rounded-lg px-3 py-2 focus:ring-1 focus:ring-cyan-500 focus:outline-none">
           </div>
           <div>
-            <label class="block text-xs text-slate-500 mb-1">UNIQUE SUB-TOPIC</label>
+            <label class="block text-slate-500 mb-1">UNIQUE BASE TOPIC</label>
             <input id="broker-topic" type="text" value="rccar/meydivyansh" class="w-full bg-slate-900/80 border border-slate-700 text-slate-200 rounded-lg px-3 py-2 focus:ring-1 focus:ring-cyan-500 focus:outline-none">
           </div>
-          <button id="connect-btn" onclick="toggleConnection()" class="w-full mt-2 py-2.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 active:bg-cyan-600 text-slate-950 font-bold tracking-wider transition duration-150 shadow-lg shadow-cyan-500/20">
-            CONNECT SYSTEM
-          </button>
         </div>
       </div>
-
-      <!-- Quick Instructions -->
-      <div class="glass-card p-6 rounded-2xl border border-slate-800/80 shadow-xl flex-grow flex flex-col justify-center">
-        <h3 class="font-semibold text-slate-300 mb-2">Controls Reference</h3>
-        <p class="text-sm text-slate-400 mb-4">Click inside this window and use your keyboard to drive the RC car in Wokwi.</p>
-        <div class="grid grid-cols-2 gap-3 text-xs font-mono text-slate-400">
-          <div class="flex items-center space-x-2"><kbd class="bg-slate-800 text-slate-200 px-2 py-1 rounded">W</kbd> / <kbd class="bg-slate-800 text-slate-200 px-2 py-1 rounded">↑</kbd> <span>Forward</span></div>
-          <div class="flex items-center space-x-2"><kbd class="bg-slate-800 text-slate-200 px-2 py-1 rounded">S</kbd> / <kbd class="bg-slate-800 text-slate-200 px-2 py-1 rounded">↓</kbd> <span>Backward</span></div>
-          <div class="flex items-center space-x-2"><kbd class="bg-slate-800 text-slate-200 px-2 py-1 rounded">A</kbd> / <kbd class="bg-slate-800 text-slate-200 px-2 py-1 rounded">←</kbd> <span>Turn Left</span></div>
-          <div class="flex items-center space-x-2"><kbd class="bg-slate-800 text-slate-200 px-2 py-1 rounded">D</kbd> / <kbd class="bg-slate-800 text-slate-200 px-2 py-1 rounded">→</kbd> <span>Turn Right</span></div>
-        </div>
-        <div class="mt-4 pt-4 border-t border-slate-800 flex items-center justify-between text-xs font-mono">
-          <span class="text-slate-500">Emergency Stop:</span>
-          <span class="flex items-center space-x-1"><kbd class="bg-red-950/80 text-red-400 border border-red-900 px-2 py-1 rounded">SPACEBAR</kbd></span>
-        </div>
-      </div>
-
+      <button id="connect-btn" onclick="toggleConnection()" class="w-full mt-4 py-2.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 active:bg-cyan-600 text-slate-950 font-bold tracking-wider transition duration-150 shadow-lg shadow-cyan-500/20 text-sm">
+        CONNECT SYSTEM
+      </button>
     </div>
 
-    <!-- CENTER PANEL: KEYBOARD GRAPHIC / JOYSTICK -->
-    <div class="glass-card p-8 rounded-2xl border border-slate-800/80 shadow-xl flex flex-col justify-between items-center space-y-6">
-      <div class="w-full text-center">
-        <h2 class="text-lg font-semibold text-slate-200">Drive Cockpit</h2>
-        <p class="text-xs font-mono text-slate-500">KEYBOARD DIRECT INPUT</p>
+    <!-- CARD 2: SPEEDOMETER COCKPIT -->
+    <div class="glass-card p-6 rounded-2xl border border-slate-800/80 shadow-xl flex flex-col items-center justify-between">
+      <div class="w-full flex justify-between items-center mb-2">
+        <h2 class="text-base font-semibold text-slate-200">Velocity Node</h2>
+        <span id="drive-mode-pill" class="text-xs bg-slate-850 border border-slate-800 text-slate-400 px-2 py-0.5 rounded font-mono">PARKED</span>
+      </div>
+
+      <!-- Speedometer SVG Dial -->
+      <div class="relative w-44 h-40 flex items-center justify-center">
+        <svg width="180" height="180" viewBox="0 0 200 200" class="absolute">
+          <!-- Background Arc (from 135deg to 405deg, i.e., -225 to 45 deg) -->
+          <path d="M 40 160 A 80 80 0 1 1 160 160" fill="none" stroke="#1e293b" stroke-width="8" stroke-linecap="round" />
+          <!-- Gauge Glowing Track -->
+          <path id="speed-track" d="M 40 160 A 80 80 0 1 1 160 160" fill="none" stroke="url(#cyanGrad)" stroke-width="8" stroke-linecap="round" stroke-dasharray="377" stroke-dashoffset="377" />
+          
+          <!-- Definitions for gradient -->
+          <defs>
+            <linearGradient id="cyanGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#06b6d4" />
+              <stop offset="100%" stop-color="#3b82f6" />
+            </linearGradient>
+          </defs>
+
+          <!-- Needle -->
+          <line id="speed-needle" x1="100" y1="100" x2="40" y2="160" stroke="#f43f5e" stroke-width="4" stroke-linecap="round" />
+          <!-- Center Cap -->
+          <circle cx="100" cy="100" r="8" fill="#0f172a" stroke="#cbd5e1" stroke-width="3" />
+        </svg>
+
+        <!-- Digital Speed Readout -->
+        <div class="absolute bottom-2 flex flex-col items-center">
+          <span id="speed-val" class="text-3xl font-extrabold tracking-tight font-mono text-white">0.0</span>
+          <span class="text-[10px] font-mono text-cyan-400">km/h</span>
+        </div>
+      </div>
+
+      <!-- Speed details -->
+      <div class="w-full flex justify-between font-mono text-[10px] text-slate-500 px-4 mt-2">
+        <span>0 km/h</span>
+        <span>Simulated TT Motor (6.5 km/h limit)</span>
+        <span>8 km/h</span>
+      </div>
+    </div>
+
+    <!-- CARD 3: PROXIMITY SENSOR -->
+    <div class="glass-card p-6 rounded-2xl border border-slate-800/80 shadow-xl flex flex-col justify-between">
+      <div class="w-full flex justify-between items-center mb-2">
+        <h2 class="text-base font-semibold text-slate-200">Proximity Monitor</h2>
+        <span id="proximity-alert" class="text-xs text-emerald-400 font-bold font-mono">SAFE</span>
+      </div>
+
+      <div class="flex flex-col items-center justify-center flex-grow py-2">
+        <div class="relative w-36 h-36 rounded-full border-4 border-slate-850 flex flex-col items-center justify-center bg-slate-900/30">
+          <svg class="absolute top-0 left-0 w-full h-full transform -rotate-90">
+            <circle cx="72" cy="72" r="66" stroke="currentColor" class="text-slate-800" stroke-width="4" fill="transparent"/>
+            <circle id="distance-ring" cx="72" cy="72" r="66" stroke="currentColor" class="text-cyan-500" stroke-width="5" fill="transparent" stroke-dasharray="414" stroke-dashoffset="150" stroke-linecap="round" class="transition-all duration-300"/>
+          </svg>
+          <span class="text-[10px] font-mono text-slate-500 uppercase">Distance</span>
+          <span id="distance-value" class="text-3xl font-extrabold font-mono text-white">--</span>
+          <span class="text-[10px] font-mono text-cyan-400">cm</span>
+        </div>
+      </div>
+
+      <div class="w-full flex justify-between text-xs font-mono text-slate-400 border-t border-slate-800/60 pt-3">
+        <span>AUTO BRAKE</span>
+        <span class="text-red-500 font-bold">15 cm Limit</span>
+      </div>
+    </div>
+
+    <!-- CARD 4: DRIVE COMMANDER (WASD KEYS) -->
+    <div class="glass-card p-6 rounded-2xl border border-slate-800/80 shadow-xl flex flex-col justify-between space-y-4">
+      <div class="flex justify-between items-center">
+        <h2 class="text-base font-semibold text-slate-200">Drive Control</h2>
+        <span class="text-[10px] font-mono text-slate-500">WASD / ARROW KEYS</span>
       </div>
 
       <!-- WASD Grid -->
-      <div class="flex flex-col items-center space-y-4">
-        <!-- Up Key -->
+      <div class="flex flex-col items-center space-y-2">
         <div>
-          <button id="key-W" onmousedown="publishDir('F')" onmouseup="publishDir('S')" class="key-cap w-16 h-16 rounded-xl bg-slate-900 border border-slate-700 flex items-center justify-center shadow-lg text-xl font-bold text-slate-400">
+          <button id="key-W" onmousedown="publishDir('F')" onmouseup="publishDir('S')" class="key-cap w-12 h-12 rounded-xl bg-slate-900/80 border border-slate-700 flex items-center justify-center shadow text-base font-bold text-slate-400">
             W
           </button>
         </div>
-        
-        <!-- ASD Row -->
-        <div class="flex space-x-4">
-          <button id="key-A" onmousedown="publishDir('L')" onmouseup="publishDir('S')" class="key-cap w-16 h-16 rounded-xl bg-slate-900 border border-slate-700 flex items-center justify-center shadow-lg text-xl font-bold text-slate-400">
+        <div class="flex space-x-2">
+          <button id="key-A" onmousedown="publishDir('L')" onmouseup="publishDir('S')" class="key-cap w-12 h-12 rounded-xl bg-slate-900/80 border border-slate-700 flex items-center justify-center shadow text-base font-bold text-slate-400">
             A
           </button>
-          <button id="key-S" onmousedown="publishDir('B')" onmouseup="publishDir('S')" class="key-cap w-16 h-16 rounded-xl bg-slate-900 border border-slate-700 flex items-center justify-center shadow-lg text-xl font-bold text-slate-400">
+          <button id="key-S" onmousedown="publishDir('B')" onmouseup="publishDir('S')" class="key-cap w-12 h-12 rounded-xl bg-slate-900/80 border border-slate-700 flex items-center justify-center shadow text-base font-bold text-slate-400">
             S
           </button>
-          <button id="key-D" onmousedown="publishDir('R')" onmouseup="publishDir('S')" class="key-cap w-16 h-16 rounded-xl bg-slate-900 border border-slate-700 flex items-center justify-center shadow-lg text-xl font-bold text-slate-400">
+          <button id="key-D" onmousedown="publishDir('R')" onmouseup="publishDir('S')" class="key-cap w-12 h-12 rounded-xl bg-slate-900/80 border border-slate-700 flex items-center justify-center shadow text-base font-bold text-slate-400">
             D
           </button>
         </div>
       </div>
 
       <!-- Speed Control Slider -->
-      <div class="w-full space-y-2">
-        <div class="flex justify-between text-xs font-mono text-slate-400">
+      <div class="w-full space-y-1 text-xs">
+        <div class="flex justify-between font-mono text-slate-400">
           <span>THROTTLE LIMIT</span>
           <span id="speed-display">80%</span>
         </div>
-        <input id="speed-slider" type="range" min="30" max="100" value="80" oninput="updateSpeed(this.value)" class="w-full accent-cyan-500 bg-slate-800 rounded-lg appearance-none h-2 cursor-pointer">
-      </div>
-
-      <!-- Command History Logger -->
-      <div class="w-full bg-slate-950/80 border border-slate-900 rounded-xl p-3 h-28 font-mono text-xs text-slate-500 overflow-y-auto space-y-1 flex flex-col justify-end" id="log-display">
-        <div>> System Idle. Configure and connect to broker.</div>
+        <input id="speed-slider" type="range" min="30" max="100" value="80" oninput="updateSpeed(this.value)" class="w-full accent-cyan-500 bg-slate-800 rounded-lg appearance-none h-1.5 cursor-pointer">
       </div>
     </div>
 
-    <!-- RIGHT PANEL: TELEMETRY & SYSTEM GRAPHICS -->
-    <div class="glass-card p-6 rounded-2xl border border-slate-800/80 shadow-xl flex flex-col justify-between space-y-6">
-      <div class="w-full">
-        <h2 class="text-lg font-semibold text-slate-200 flex items-center justify-between">
-          <span>Telemetry Stream</span>
-          <span class="text-xs bg-slate-800 text-cyan-400 px-2 py-0.5 rounded font-mono">LIVE</span>
-        </h2>
-        <p class="text-xs font-mono text-slate-500">INCOMING SENSOR READOUTS</p>
-      </div>
+    <!-- CARD 5: BATTERY & LIVE TELEMETRY -->
+    <div class="glass-card p-6 rounded-2xl border border-slate-800/80 shadow-xl flex flex-col justify-between">
+      <h2 class="text-base font-semibold text-slate-200 mb-2">Battery & System</h2>
+      
+      <!-- Battery Graphic Layout -->
+      <div class="flex items-center space-x-4 py-2">
+        <!-- Battery Icon -->
+        <div class="relative w-12 h-24 border-2 border-slate-600 rounded-lg p-0.5 flex flex-col-reverse items-stretch justify-start">
+          <div class="absolute -top-2 left-1/4 right-1/4 h-2 bg-slate-600 rounded-t"></div>
+          <!-- Battery Fill -->
+          <div id="battery-fill" class="bg-emerald-500 rounded transition-all duration-500" style="height: 0%"></div>
+        </div>
 
-      <!-- Ultrasonic Distance Gauge -->
-      <div class="flex flex-col items-center justify-center space-y-2 flex-grow">
-        <div class="relative w-44 h-44 rounded-full border-4 border-slate-850 flex flex-col items-center justify-center bg-slate-900/30">
-          <!-- Animated Ring -->
-          <svg class="absolute top-0 left-0 w-full h-full transform -rotate-90">
-            <circle cx="88" cy="88" r="82" stroke="currentColor" class="text-slate-800" stroke-width="4" fill="transparent"/>
-            <circle id="distance-ring" cx="88" cy="88" r="82" stroke="currentColor" class="text-cyan-500" stroke-width="6" fill="transparent" stroke-dasharray="515" stroke-dashoffset="250" stroke-linecap="round" class="transition-all duration-300"/>
-          </svg>
-          <span class="text-xs font-mono text-slate-500">OBSTACLE DIST</span>
-          <span id="distance-value" class="text-4xl font-extrabold tracking-tight text-white font-mono">--</span>
-          <span class="text-xs font-mono text-cyan-400">cm</span>
+        <!-- Battery Text details -->
+        <div class="flex-grow space-y-1 font-mono">
+          <div class="text-[10px] text-slate-500">BATTERY (2S LI-ION)</div>
+          <div class="text-2xl font-extrabold text-white"><span id="bat-pct">--</span>%</div>
+          <div class="text-xs text-slate-300"><span id="bat-volt">--</span> V</div>
         </div>
       </div>
 
-      <!-- Data Details -->
-      <div class="space-y-3 font-mono text-xs">
-        <div class="flex justify-between p-2 rounded bg-slate-900/50 border border-slate-800/50">
-          <span class="text-slate-500">LATENCY (RTT)</span>
+      <!-- Telemetry details -->
+      <div class="space-y-2 border-t border-slate-800/60 pt-3 text-[11px] font-mono">
+        <div class="flex justify-between">
+          <span class="text-slate-500">RTT LATENCY</span>
           <span id="rtt-val" class="text-slate-300">-- ms</span>
         </div>
-        <div class="flex justify-between p-2 rounded bg-slate-900/50 border border-slate-800/50">
-          <span class="text-slate-500">PROXIMITY WARNING</span>
-          <span id="proximity-alert" class="text-emerald-400 font-bold">SAFE</span>
-        </div>
-        <div class="flex justify-between p-2 rounded bg-slate-900/50 border border-slate-800/50">
-          <span class="text-slate-500">ESP32 UP-TIME</span>
+        <div class="flex justify-between">
+          <span class="text-slate-500">ESP32 UPTIME</span>
           <span id="uptime-val" class="text-slate-300">-- s</span>
         </div>
       </div>
+    </div>
 
+    <!-- CARD 6: BATTERY CHART HISTORY -->
+    <div class="glass-card p-6 rounded-2xl border border-slate-800/80 shadow-xl flex flex-col justify-between">
+      <div class="flex justify-between items-center mb-2">
+        <h2 class="text-base font-semibold text-slate-200">Battery History</h2>
+        <span class="text-[9px] font-mono text-slate-500">VOLTAGE DECAY GRAPH</span>
+      </div>
+
+      <!-- Chart Container -->
+      <div class="w-full h-32 flex items-center justify-center">
+        <canvas id="batteryChart"></canvas>
+      </div>
+
+      <div class="w-full text-right text-[10px] font-mono text-slate-500">
+        Simulated voltage scale: 6.0V - 8.4V
+      </div>
     </div>
 
   </main>
 
-  <!-- Footer -->
-  <footer class="w-full text-center py-4 border-t border-slate-900 text-xs text-slate-600 font-mono">
-    ESP32 MQTT Simulation Console • Powered by Wokwi-GUEST
+  <!-- Logger Frame -->
+  <footer class="w-full max-w-7xl mx-auto px-6 py-4 border-t border-slate-900 grid grid-cols-1 lg:grid-cols-4 gap-4 items-center">
+    <div class="lg:col-span-3">
+      <div class="bg-slate-950/70 border border-slate-900 rounded-xl p-2.5 h-16 font-mono text-[10px] text-slate-500 overflow-y-auto space-y-0.5" id="log-display">
+        <div>> Console ready. Awaiting connection parameters.</div>
+      </div>
+    </div>
+    <div class="text-right text-[10px] font-mono text-slate-600">
+      ESP32 MQTT Simulation Console • Powered by Wokwi-GUEST
+    </div>
   </footer>
 
-  <!-- Web Controller Script -->
+  <!-- Web Controller & Charting Script -->
   <script>
     let client = null;
     let baseTopic = 'rccar/meydivyansh';
@@ -227,6 +292,12 @@
     let activeKeys = {};
     let lastSentCommand = '';
     let pingTime = 0;
+    
+    // Live Chart Setup
+    let chartInstance = null;
+    const maxDataPoints = 15;
+    const chartLabels = Array(maxDataPoints).fill('');
+    const chartData = Array(maxDataPoints).fill(null);
 
     const logDisplay = document.getElementById('log-display');
 
@@ -241,9 +312,56 @@
       const entry = document.createElement('div');
       entry.innerHTML = `<span class="text-slate-600">[${time}]</span> <span class="${color}">${message}</span>`;
       logDisplay.appendChild(entry);
-      
-      // Auto scroll to bottom
       logDisplay.scrollTop = logDisplay.scrollHeight;
+    }
+
+    // Initialize Chart.js
+    function initChart() {
+      const ctx = document.getElementById('batteryChart').getContext('2d');
+      chartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: chartLabels,
+          datasets: [{
+            label: 'Voltage (V)',
+            data: chartData,
+            borderColor: '#10b981',
+            borderWidth: 2,
+            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+            fill: true,
+            tension: 0.4,
+            pointRadius: 1,
+            pointHoverRadius: 5
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false }
+          },
+          scales: {
+            x: { display: false },
+            y: {
+              min: 5.8,
+              max: 8.6,
+              grid: { color: 'rgba(255, 255, 255, 0.05)' },
+              ticks: {
+                color: '#64748b',
+                font: { size: 9, family: 'Space Grotesk' }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    function addChartData(val) {
+      if (!chartInstance) return;
+      
+      chartData.shift();
+      chartData.push(val);
+      chartInstance.update('none'); // Update without animation for performance
     }
 
     function toggleConnection() {
@@ -263,8 +381,6 @@
       connectBtn.innerText = 'CONNECTING...';
       log(`Connecting to WS broker: ws://${brokerHost}:8000/mqtt ...`);
 
-      // Public HiveMQ broker supports websockets on port 8000 (ws) or 8884 (wss)
-      // Standard broker.hivemq.com websocket port is 8000
       const options = {
         connectTimeout: 4000,
         clientId: 'apx_dashboard_' + Math.random().toString(16).substring(2, 8),
@@ -279,7 +395,7 @@
           isConnected = true;
           connectBtn.disabled = false;
           connectBtn.innerText = 'DISCONNECT';
-          connectBtn.className = 'w-full mt-2 py-2.5 rounded-lg bg-red-600 hover:bg-red-500 active:bg-red-700 text-white font-bold tracking-wider transition duration-150 shadow-lg shadow-red-500/20';
+          connectBtn.className = 'w-full mt-4 py-2.5 rounded-lg bg-red-600 hover:bg-red-500 active:bg-red-700 text-white font-bold tracking-wider transition duration-150 shadow-lg shadow-red-500/20 text-sm';
           
           // Update Pill UI
           const pill = document.getElementById('conn-status-pill');
@@ -343,25 +459,38 @@
       const connectBtn = document.getElementById('connect-btn');
       connectBtn.disabled = false;
       connectBtn.innerText = 'CONNECT SYSTEM';
-      connectBtn.className = 'w-full mt-2 py-2.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 active:bg-cyan-600 text-slate-950 font-bold tracking-wider transition duration-150 shadow-lg shadow-cyan-500/20';
+      connectBtn.className = 'w-full mt-4 py-2.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 active:bg-cyan-600 text-slate-950 font-bold tracking-wider transition duration-150 shadow-lg shadow-cyan-500/20 text-sm';
 
       const pill = document.getElementById('conn-status-pill');
       pill.className = 'flex items-center space-x-2 px-3 py-1.5 rounded-full border border-red-500/30 bg-red-950/20 text-red-400 text-xs font-mono transition-all duration-300';
       document.getElementById('conn-indicator').className = 'w-2.5 h-2.5 rounded-full bg-red-500';
       document.getElementById('conn-text').innerText = 'DISCONNECTED';
 
-      // Clear telemetry readouts
+      // Reset Telemetry UI
       document.getElementById('distance-value').innerText = '--';
       document.getElementById('rtt-val').innerText = '-- ms';
       document.getElementById('uptime-val').innerText = '-- s';
-      document.getElementById('distance-ring').setAttribute('stroke-dashoffset', '515');
+      document.getElementById('distance-ring').setAttribute('stroke-dashoffset', '414');
+      
+      // Reset Speedometer
+      document.getElementById('speed-val').innerText = '0.0';
+      document.getElementById('speed-track').setAttribute('stroke-dashoffset', '377');
+      document.getElementById('speed-needle').style.transform = 'rotate(0deg)';
+      document.getElementById('drive-mode-pill').innerText = 'PARKED';
+      document.getElementById('drive-mode-pill').className = 'text-xs bg-slate-850 border border-slate-800 text-slate-400 px-2 py-0.5 rounded font-mono';
+      
+      // Reset Battery
+      document.getElementById('bat-pct').innerText = '--';
+      document.getElementById('bat-volt').innerText = '--';
+      document.getElementById('battery-fill').style.height = '0%';
+      chartData.fill(null);
+      if (chartInstance) chartInstance.update();
     }
 
     function updateSpeed(val) {
       currentSpeed = parseInt(val);
       document.getElementById('speed-display').innerText = val + '%';
       log(`Speed limit adjusted to ${val}%`, 'info');
-      // If actively moving, re-send command with new speed
       if (lastSentCommand && lastSentCommand !== 'S') {
         publishDir(lastSentCommand, true);
       }
@@ -379,8 +508,6 @@
       lastSentCommand = direction;
 
       const controlTopic = `${baseTopic}/control`;
-      // Payload format: {"dir":"F","speed":200,"ping":172131343}
-      // Speed is converted from percentage (0-100) to PWM values (0-255)
       const pwmSpeed = Math.round((currentSpeed / 100) * 255);
       
       const payload = {
@@ -389,9 +516,7 @@
         ping: Date.now()
       };
 
-      // Set latency check anchor
       pingTime = payload.ping;
-
       client.publish(controlTopic, JSON.stringify(payload), { qos: 0 });
       
       let dirText = 'STOP';
@@ -405,50 +530,102 @@
 
     // Update Telemetry Display
     function updateTelemetryUI(data) {
-      // Calculate Latency (RTT)
+      // Latency & Uptime
       if (data.ping) {
         const rtt = Date.now() - data.ping;
         document.getElementById('rtt-val').innerText = `${rtt} ms`;
       }
-      
-      // Update Uptime
       if (data.uptime) {
         document.getElementById('uptime-val').innerText = `${data.uptime} s`;
       }
 
-      // Update Ultrasonic sensor
+      // Proximity Ultrasonic Gauge
       if (data.distance !== undefined) {
         const dist = Math.round(data.distance);
         const distVal = document.getElementById('distance-value');
         distVal.innerText = dist;
 
-        // Circular Ring Dash offset logic (max distance ~ 400cm)
-        // circumference of r=82 circle is 2 * PI * 82 = 515.2
+        // Circumference of r=66 circle is 2 * PI * 66 = 414.7
         const maxDist = 400;
         const clampedDist = Math.min(Math.max(dist, 0), maxDist);
-        const offset = 515 - (clampedDist / maxDist) * 515;
+        const offset = 414 - (clampedDist / maxDist) * 414;
         const ring = document.getElementById('distance-ring');
         ring.setAttribute('stroke-dashoffset', offset);
 
-        // Alert Levels based on distance
         const alertEl = document.getElementById('proximity-alert');
         if (dist <= 15) {
           alertEl.innerText = 'CRITICAL STOP';
-          alertEl.className = 'text-red-500 font-extrabold animate-pulse';
+          alertEl.className = 'text-xs text-red-500 font-extrabold animate-pulse font-mono';
           ring.className.baseVal = 'text-red-500 transition-all duration-300';
         } else if (dist <= 40) {
           alertEl.innerText = 'WARNING';
-          alertEl.className = 'text-amber-500 font-bold';
+          alertEl.className = 'text-xs text-amber-500 font-bold font-mono';
           ring.className.baseVal = 'text-amber-500 transition-all duration-300';
         } else {
           alertEl.innerText = 'SAFE';
-          alertEl.className = 'text-emerald-400 font-bold';
+          alertEl.className = 'text-xs text-emerald-400 font-bold font-mono';
           ring.className.baseVal = 'text-cyan-500 transition-all duration-300';
         }
       }
+
+      // Speedometer Gauge Update
+      if (data.speed !== undefined) {
+        const speed = parseFloat(data.speed);
+        document.getElementById('speed-val').innerText = speed.toFixed(1);
+        
+        // Map speed (0 to 8) to SVG Track dashoffset (gauge track circumference ~ 377)
+        // 377 is gauge track arc length (approx 3/4 circle of radius 80)
+        // needle rotation limits: speed 0 = 0deg, speed 8 = 270deg rotation
+        const maxSimSpeed = 8.0;
+        const speedRatio = Math.min(speed, maxSimSpeed) / maxSimSpeed;
+        const offset = 377 - (speedRatio * 377);
+        document.getElementById('speed-track').setAttribute('stroke-dashoffset', offset);
+        
+        // Angle calculations for the needle rotation:
+        // Starting angle is pointing to lower-left (40, 160).
+        // 0 to 270 degree rotation maps speed 0 to 8.
+        const rotAngle = speedRatio * 270;
+        document.getElementById('speed-needle').style.transform = `rotate(${rotAngle}deg)`;
+
+        // Update Drive Mode text based on speed and command
+        const modePill = document.getElementById('drive-mode-pill');
+        if (speed === 0) {
+          modePill.innerText = 'PARKED';
+          modePill.className = 'text-xs bg-slate-850 border border-slate-800 text-slate-400 px-2 py-0.5 rounded font-mono';
+        } else {
+          modePill.innerText = lastSentCommand === 'B' ? 'REVERSE' : 'FORWARD';
+          modePill.className = lastSentCommand === 'B' 
+            ? 'text-xs bg-amber-950/30 border border-amber-900/50 text-amber-400 px-2 py-0.5 rounded font-mono'
+            : 'text-xs bg-cyan-950/30 border border-cyan-900/50 text-cyan-400 px-2 py-0.5 rounded font-mono';
+        }
+      }
+
+      // Battery Status updates
+      if (data.battery !== undefined && data.voltage !== undefined) {
+        const batPct = Math.round(data.battery);
+        const volt = parseFloat(data.voltage);
+
+        document.getElementById('bat-pct').innerText = batPct;
+        document.getElementById('bat-volt').innerText = volt.toFixed(2);
+        
+        const fillBar = document.getElementById('battery-fill');
+        fillBar.style.height = `${batPct}%`;
+
+        // Change color based on charge level
+        if (batPct > 50) {
+          fillBar.className = 'bg-emerald-500 rounded transition-all duration-500 shadow-glow-green';
+        } else if (batPct > 20) {
+          fillBar.className = 'bg-amber-500 rounded transition-all duration-500';
+        } else {
+          fillBar.className = 'bg-red-500 rounded transition-all duration-500 shadow-glow-red animate-pulse';
+        }
+
+        // Add to historical line chart
+        addChartData(volt);
+      }
     }
 
-    // Map Keyboard Inputs
+    // Keyboard Inputs mapping
     const keyMap = {
       'KeyW': 'F', 'ArrowUp': 'F',
       'KeyS': 'B', 'ArrowDown': 'B',
@@ -465,24 +642,18 @@
     };
 
     document.addEventListener('keydown', (event) => {
-      // Avoid tracking repeats
       if (event.repeat) return;
-      
       const cmd = keyMap[event.code];
       if (cmd) {
-        event.preventDefault(); // Stop scrolling with arrows/space
+        event.preventDefault();
         activeKeys[cmd] = true;
         
-        // Highlight UI
         const btnId = visualKeys[cmd];
         if (btnId) {
           document.getElementById(btnId).classList.add('active');
         } else if (event.code === 'Space') {
-          // Highlight all key-caps flash briefly or similar
           log('EMERGENCY STOP TRIGGERED', 'warn');
         }
-
-        // Publish current active command
         determineAction();
       }
     });
@@ -491,20 +662,16 @@
       const cmd = keyMap[event.code];
       if (cmd) {
         activeKeys[cmd] = false;
-        
-        // De-highlight UI
         const btnId = visualKeys[cmd];
         if (btnId) {
           document.getElementById(btnId).classList.remove('active');
         }
-
         determineAction();
       }
     });
 
     function determineAction() {
-      // Prioritize commands
-      if (activeKeys['S']) { // Spacebar press stops everything
+      if (activeKeys['S']) {
         publishDir('S');
         return;
       }
@@ -518,9 +685,14 @@
       } else if (activeKeys['R']) {
         publishDir('R');
       } else {
-        publishDir('S'); // Stop if no direction key pressed
+        publishDir('S');
       }
     }
+
+    // Initialize elements on load
+    window.addEventListener('DOMContentLoaded', () => {
+      initChart();
+    });
   </script>
 </body>
 </html>

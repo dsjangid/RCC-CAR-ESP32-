@@ -9,7 +9,7 @@ const char* password = "";
 // --- MQTT Broker Configuration ---
 const char* mqtt_server = "broker.hivemq.com";
 const int mqtt_port = 1883;
-const char* client_id = "ESP32_RCCar_MeyDivyansh"; // Ensure this matches dashboard sub-topic
+const char* client_id = "ESP32_RCCar_MeyDivyansh";
 const char* control_topic = "rccar/meydivyansh/control";
 const char* telemetry_topic = "rccar/meydivyansh/telemetry";
 
@@ -28,17 +28,25 @@ const int pinIN4 = 25; // Direction Input 4 Right
 const int pinTrig = 33;
 const int pinEcho = 32;
 
+// Battery Potentiometer (ADC1 Channel 6)
+const int pinBatteryPot = 34;
+
 // --- System Variables ---
 WiFiClient espClient;
 PubSubClient client(espClient);
 long lastTelemetryTime = 0;
-const int telemetryInterval = 500; // Send telemetry every 500ms
+const int telemetryInterval = 300; // Faster telemetry (300ms) for responsive speedometer
 long lastPingTimestamp = 0;        // Echo back for latency calculation
 
 // Movement state variables
 char currentDir = 'S';
-int currentSpeed = 0; 
+int targetPWM = 0;
 bool autoStopped = false;
+
+// Physics Simulation variables
+float targetSpeedKmh = 0.0;
+float actualSpeedKmh = 0.0;
+const float maxSpeedKmh = 6.5;     // Simulated top speed (km/h) of TT motors at 2S voltage
 
 // Function declarations
 void setupWiFi();
@@ -46,6 +54,7 @@ void callback(char* topic, byte* payload, unsigned int length);
 void reconnectMQTT();
 void driveCar(char direction, int speed);
 float getDistance();
+void updatePhysics();
 void sendTelemetry();
 
 void setup() {
@@ -63,6 +72,9 @@ void setup() {
   // Initialize sensor pins
   pinMode(pinTrig, OUTPUT);
   pinMode(pinEcho, INPUT);
+  
+  // Set ADC attenuation for 3.3V full scale range
+  analogSetPinAttenuation(pinBatteryPot, ADC_11db);
 
   // Ensure motors are initially stopped
   driveCar('S', 0);
@@ -80,6 +92,9 @@ void loop() {
     reconnectMQTT();
   }
   client.loop();
+
+  // Update speed physics (smooth needle movement)
+  updatePhysics();
 
   // Collision Avoidance logic (Auto Stop if object is too close)
   float distance = getDistance();
@@ -120,8 +135,6 @@ void setupWiFi() {
 
 // MQTT callback to process incoming messages
 void callback(char* topic, byte* payload, unsigned int length) {
-  Serial.printf("\nMessage arrived on topic: [%s]\n", topic);
-  
   if (strcmp(topic, control_topic) == 0) {
     // Allocate space for JSON parsing
     StaticJsonDocument<256> doc;
@@ -141,8 +154,6 @@ void callback(char* topic, byte* payload, unsigned int length) {
     if (dirStr) {
       char direction = dirStr[0];
       lastPingTimestamp = pingVal;
-      
-      Serial.printf("Command - Dir: %c, Speed PWM: %d, Latency Ref: %ld\n", direction, speedVal, pingVal);
 
       // Block forward commands if obstacle is too close
       if (direction == 'F' && getDistance() <= 15.0) {
@@ -176,10 +187,28 @@ void reconnectMQTT() {
   }
 }
 
+// Updates simulated speedometer value based on motor actions
+void updatePhysics() {
+  if (currentDir == 'S') {
+    targetSpeedKmh = 0.0;
+  } else if (currentDir == 'L' || currentDir == 'R') {
+    // Turning is slower
+    targetSpeedKmh = ((float)targetPWM / 255.0) * (maxSpeedKmh * 0.5);
+  } else {
+    // Forward or backward
+    targetSpeedKmh = ((float)targetPWM / 255.0) * maxSpeedKmh;
+  }
+
+  // Smooth acceleration / deceleration ramp
+  // Speed speedometer needle moves nicely using a simple low-pass filter
+  actualSpeedKmh += (targetSpeedKmh - actualSpeedKmh) * 0.15;
+  if (abs(actualSpeedKmh) < 0.05) actualSpeedKmh = 0.0;
+}
+
 // Controls the L293D pins based on target direction and PWM speed
 void driveCar(char direction, int speed) {
   currentDir = direction;
-  currentSpeed = speed;
+  targetPWM = speed;
 
   switch (direction) {
     case 'F': // Forward
@@ -200,7 +229,7 @@ void driveCar(char direction, int speed) {
       analogWrite(pinENB, speed);
       break;
 
-    case 'L': // Turn Left (Spin on spot or sharp turn)
+    case 'L': // Turn Left
       digitalWrite(pinIN1, LOW);
       digitalWrite(pinIN2, HIGH);
       digitalWrite(pinIN3, HIGH);
@@ -209,7 +238,7 @@ void driveCar(char direction, int speed) {
       analogWrite(pinENB, speed);
       break;
 
-    case 'R': // Turn Right (Spin on spot or sharp turn)
+    case 'R': // Turn Right
       digitalWrite(pinIN1, HIGH);
       digitalWrite(pinIN2, LOW);
       digitalWrite(pinIN3, LOW);
@@ -239,10 +268,10 @@ float getDistance() {
   delayMicroseconds(10);
   digitalWrite(pinTrig, LOW);
 
-  long duration = pulseIn(pinEcho, HIGH, 30000); // 30ms timeout (~5m max)
+  long duration = pulseIn(pinEcho, HIGH, 30000); // 30ms timeout
   
   if (duration == 0) {
-    return 400.0; // Return max distance if no pulse received
+    return 400.0;
   }
   
   float distanceCm = duration * 0.0343 / 2.0;
@@ -253,15 +282,28 @@ float getDistance() {
 void sendTelemetry() {
   StaticJsonDocument<256> teleDoc;
   
+  // Read Simulated Battery Voltage from Potentiometer
+  int rawADC = analogRead(pinBatteryPot);
+  
+  // Map ADC value to voltage
+  // 3.3V reference, but simulating a 2S Li-ion battery (approx 6.0V discharged to 8.4V charged)
+  float batteryVoltage = ((float)rawADC / 4095.0) * 8.4;
+  if (batteryVoltage < 0.0) batteryVoltage = 0.0;
+  
+  // Calculate percentage: 6.0V = 0%, 8.4V = 100%
+  float batteryPct = ((batteryVoltage - 6.0) / (8.4 - 6.0)) * 100.0;
+  if (batteryPct < 0.0) batteryPct = 0.0;
+  if (batteryPct > 100.0) batteryPct = 100.0;
+
   teleDoc["distance"] = getDistance();
   teleDoc["uptime"] = millis() / 1000;
-  teleDoc["ping"] = lastPingTimestamp; // Return ping timestamp for latency calculations
-  
+  teleDoc["ping"] = lastPingTimestamp;
+  teleDoc["speed"] = round(actualSpeedKmh * 100.0) / 100.0; // Round to 2 decimal places
+  teleDoc["voltage"] = round(batteryVoltage * 100.0) / 100.0;
+  teleDoc["battery"] = round(batteryPct);
+
   char buffer[256];
   serializeJson(teleDoc, buffer);
   
   client.publish(telemetry_topic, buffer);
-  // Optional: Serial print for local simulation debugging
-  // Serial.print("Telemetry Sent: ");
-  // Serial.println(buffer);
 }
