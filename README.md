@@ -1,131 +1,77 @@
 # APEX ESP32 RC Car & Telemetry Dashboard
 
-An interactive, web-controlled RC Car built on the **ESP32** microcontroller. This project integrates differential motor driving (L293D H-Bridge), ultrasonic distance telemetry with autonomous emergency braking, and a simulated 2S battery voltage monitor. 
+An interactive, web-controlled robotic RC Car powered by the **ESP32** microcontroller. This project integrates H-Bridge motor controls (L293D), ultrasonic distance sensors with autonomous collision prevention, and live telemetry tracking.
 
-The car can be simulated online in **Wokwi** or assembled as physical hardware, and is controlled via a custom local web dashboard communicating over **MQTT (WebSockets)**.
-
----
-
-## 📋 Features
-
-- 🎮 **Real-time Web Cockpit:** Drive the car using keyboard controls (`W`, `A`, `S`, `D` or arrow keys).
-- 📈 **Telemetry Analytics:** Live graph of battery voltage history (Chart.js) and distance telemetry.
-- ⚡ **Physics Speedometer:** Simulated speed values featuring acceleration and deceleration physics (inertia needle).
-- 🛑 **Collision Avoidance:** Autonomous emergency braking if an obstacle is detected within 15 cm.
-- 🔋 **Battery Monitoring:** Reads battery status via an analog pin (simulating a 2S Li-ion pack, 6.0V - 8.4V).
+The vehicle can be fully simulated in **Wokwi** or built with real hardware, and is controlled over the internet using a custom laptop dashboard client communicating via **MQTT over WebSockets**.
 
 ---
 
-## 🛠️ Hardware Bill of Materials (BOM)
+## 🚀 Quick Navigation
 
-To build this project physically, you will need:
-
-| Qty | Component | Specification |
-| :--- | :--- | :--- |
-| 1 | **ESP32 Development Board** | DevKit v1 (30 or 38-pin version) |
-| 1 | **L293D Motor Driver IC** | Dual H-bridge DIP-16 chip (or L293D module) |
-| 2 | **DC Gear Motors & Wheels** | TT Motors (3V-6V yellow gearboxes) |
-| 1 | **HC-SR04 Sensor** | Ultrasonic distance sensor (5V) |
-| 1 | **Battery Source** | 2x 18650 Li-ion batteries (7.4V nominal, 8.4V max) with holder |
-| 2 | **Resistors (Voltage Divider)** | 10kΩ and 4.7kΩ resistors (for battery level sensing safely) |
-| 1 | **Breadboard & Wires** | Half-size breadboard and male-to-male + male-to-female jumper wires |
-| 1 | **Slide Switch** | Single Pole Single Throw (SPST) on/off switch |
+- 🔌 **Detailed Hardware Guide:** For physical assembly instructions, schematic connections, and safety voltage divider circuits, see [HARDWARE.md](HARDWARE.md) (or [local link](file:///Users/meydivyansh/Projects/esp32-rc-car/HARDWARE.md)).
+- 🖥️ **Web Dashboard UI:** View the local dashboard page [index.html](index.html) (or [local link](file:///Users/meydivyansh/Projects/esp32-rc-car/index.html)).
+- 🧠 **ESP32 Firmware:** Check out the microcontroller source code [sketch.ino](sketch.ino) (or [local link](file:///Users/meydivyansh/Projects/esp32-rc-car/sketch.ino)).
 
 ---
 
-## 🔌 Hardware Installation & Wiring Guide
-
-> [!WARNING]
-> **DO NOT** connect the 7.4V/8.4V battery directly to any ESP32 GPIO pin. ESP32 pins are **3.3V max tolerant**. You must use a voltage divider (explained below) to step down the battery measurement voltage safely.
-
-### 1. Pin Connection Table
-
-| Source Device/Pin | Destination Device/Pin | Wire Color (Rec.) | Description |
-| :--- | :--- | :--- | :--- |
-| **ESP32 GND** | Common GND Rail | Black | Logic ground reference |
-| **ESP32 VIN (5V)** | Common 5V Rail / L293D VCC1 | Red | Powering logic |
-| **ESP32 3V3** | Breadboard 3.3V Rail | Orange | Reference voltage |
-| **ESP32 D12** | L293D Pin 1 (1,2EN) | Yellow | Left Motor Speed (PWM) |
-| **ESP32 D13** | L293D Pin 2 (1A) | Green | Left Motor Direction 1 |
-| **ESP32 D14** | L293D Pin 7 (2A) | Blue | Left Motor Direction 2 |
-| **ESP32 D27** | L293D Pin 9 (3,4EN) | Yellow | Right Motor Speed (PWM) |
-| **ESP32 D26** | L293D Pin 10 (3A) | Green | Right Motor Direction 1 |
-| **ESP32 D25** | L293D Pin 15 (4A) | Blue | Right Motor Direction 2 |
-| **ESP32 D33** | HC-SR04 TRIG | White/Cyan | Trigger pulse signal |
-| **ESP32 D32** | HC-SR04 ECHO | Purple | Echo back signal |
-| **ESP32 D34 (ADC)** | Voltage Divider output (V_out) | Blue | Battery measurement voltage |
-
----
-
-### 2. Motor Driver (L293D) Wiring details
-
-The L293D has a notch indicating the top. Pin numbers count down the left side (1 to 8) and back up the right side (9 to 16).
+## 📋 Project Architecture
 
 ```text
-               L293D PINOUT
-             +------\_/------+
-      1,2EN  | 1          16 |  VCC1 (Logic 5V from ESP32 VIN)
-         1A  | 2          15 |  4A
-         1Y  | 3          14 |  4Y   --> Connected to Motor Right Pin 2
-        GND  | 4          13 |  GND  --- Common Ground
-        GND  | 5          12 |  GND  --- Common Ground
-         2Y  | 6          11 |  3Y   --> Connected to Motor Right Pin 1
-         2A  | 7          10 |  3A
-       VCC2  | 8           9 |  3,4EN
-             +---------------+
+                  +-----------------------------------------+
+                  |            Laptop Dashboard             |
+                  |  - Keyboard WASD Controller             |
+                  |  - Live Chart.js Battery Voltage Graph  |
+                  |  - Obstacle Alarm & Speedometer needle  |
+                  +--------------------+--------------------+
+                                       | (MQTT WebSockets)
+                                       v
+                             +-------------------+
+                             | Public Broker     |
+                             | broker.hivemq.com |
+                             +---------+---------+
+                                       | (MQTT TCP)
+                                       v
+                  +--------------------+--------------------+
+                  |       ESP32 Microcontroller (Wokwi)     |
+                  |  - Receives drive controls              |
+                  |  - Computes speed physics / ramps       |
+                  |  - Monitors battery (ADC Potentiometer)  |
+                  |  - Calculates obstacle proximity        |
+                  +-----------------------------------------+
 ```
-
-- **VCC1 (Pin 16):** Connect to ESP32 **VIN** (5V).
-- **VCC2 (Pin 8):** Connect to battery **Positive (+)** (7.4V/8.4V) via the slide switch. This supplies the power to run the motors.
-- **GND (Pins 4, 5, 12, 13):** Connect all together to the common Ground rail.
-- **Left Motor:** Connected to **1Y (Pin 3)** and **2Y (Pin 6)**.
-- **Right Motor:** Connected to **3Y (Pin 11)** and **4Y (Pin 14)**.
 
 ---
 
-### 3. Battery Voltage Divider Design (Critical Step)
+## 🛠️ Key System Features
 
-To measure the 8.4V (fully charged) battery, we need to scale the voltage down to **2.7V** (so it fits safely under the ESP32's 3.3V ADC range). 
+### 1. Velocity Engine with Inertia Physics
+The ESP32 firmware features a built-in virtual physics model. When you steer or accelerate, the dashboard's circular speedometer gauge reacts with realistic inertia (smoothing the dial needle) instead of jumping instantly, replicating a real vehicle.
 
-We create a voltage divider using two resistors:
-- **$R_1$ (Connected to Battery +):** $10\text{ k}\Omega$
-- **$R_2$ (Connected to Ground):** $4.7\text{ k}\Omega$
+### 2. Autonomous Collision Avoidance
+Equipped with an ultrasonic distance sensor loop. If the car is driving forward and detects an obstacle within **15 cm**, it triggers an emergency automatic brake, updates the dashboard status to `CRITICAL STOP`, and blocks further forward input until the obstacle is cleared.
 
-```text
-    Battery (+) ----[ 10k Ohm (R1) ]----+-----> To ESP32 GPIO 34 (ADC)
-                                        |
-                                 [ 4.7k Ohm (R2) ]
-                                        |
-    Common Ground ----------------------+----------------------
-```
-
-**Formula:**
-$$V_{\text{out}} = V_{\text{battery}} \times \left( \frac{R_2}{R_1 + R_2} \right)$$
-$$V_{\text{out}} = 8.4\text{V} \times \left( \frac{4.7}{10 + 4.7} \right) \approx 2.68\text{V} \quad \text{(Safe for ESP32!)}$$
-
-*Note: In the Wokwi simulation diagram (`diagram.json`), we use a Potentiometer connected to 3.3V to act as a simulator control knob for the battery voltage.*
+### 3. Real-Time Battery Telemetry & Charting
+A dedicated battery measurement sensor (simulated via an analog potentiometer or scaled with resistors on physical boards) sends real-time voltage ratings. The web cockpit plots these points on a live Chart.js line graph and updates a dynamic battery cell graphic that flashes red under 20%.
 
 ---
 
 ## 💻 Firmware Setup & Flashing
 
 1. Install **Arduino IDE** on your computer.
-2. In Arduino IDE, go to **Tools** > **Board** > **Boards Manager**, search for `esp32` (by Espressif Systems), and install it.
-3. Go to **Sketch** > **Include Library** > **Manage Libraries** and install the following dependencies:
-   - **PubSubClient** (by Nick O'Leary) - for MQTT messaging.
-   - **ArduinoJson** (by Benoit Blanchon) - for structured data packaging.
-4. Connect your ESP32 to your laptop using a micro-USB (or USB-C) cable.
-5. In Arduino IDE, select your board model (e.g., `ESP32 Dev Module`) and your USB Port.
-6. Open `sketch.ino`, configure your WiFi network credentials if flashing to physical hardware (replace `"Wokwi-GUEST"` with your home WiFi SSID and password).
-7. Click **Upload**.
+2. Go to **Tools** > **Board** > **Boards Manager**, search for `esp32` (by Espressif Systems), and install it.
+3. Install the following libraries via **Sketch** > **Include Library** > **Manage Libraries**:
+   - `PubSubClient` (by Nick O'Leary) - for MQTT connection.
+   - `ArduinoJson` (by Benoit Blanchon) - for parsing controls and structuring telemetry data.
+4. If building physical hardware, open `sketch.ino` and replace the SSID (`"Wokwi-GUEST"`) and password with your home Wi-Fi credentials.
+5. Connect your ESP32 to your computer using a USB cable and upload the sketch.
 
 ---
 
-## 🎮 How to Control and Drive
+## 🎮 Running the Simulation & Dashboard
 
-1. Double-click the local web dashboard file: [index.html](file:///Users/meydivyansh/Projects/esp32-rc-car/index.html) in your browser.
-2. Ensure you have configured the dashboard to connect to the correct MQTT broker host (`broker.hivemq.com`) and matching base topic (`rccar/meydivyansh`).
-3. Click **CONNECT SYSTEM** on the dashboard.
-4. Run the ESP32 (either turn on the physical RC Car switch or click Play in Wokwi).
-5. Click anywhere on the dashboard window to focus, and use **WASD** or **Arrow keys** to drive the car!
-6. Adjust the potentiometer to watch the battery levels decay or rise.
+1. Double-click the local dashboard: [index.html](file:///Users/meydivyansh/Projects/esp32-rc-car/index.html) to open it in your browser.
+2. Click **CONNECT SYSTEM** (connects your cockpit to the MQTT broker).
+3. Start the Wokwi simulation (using the circuit files `diagram.json`, `sketch.ino`, and `libraries.txt`).
+4. Once the serial monitor prints `CONNECTED to broker!`, return to the dashboard.
+5. Click inside the cockpit window to focus, and use **WASD** or **Arrow keys** to drive the car!
+6. Slide the potentiometer in Wokwi to watch battery voltage readings update live on your telemetry charts.
