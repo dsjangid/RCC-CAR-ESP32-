@@ -14,6 +14,23 @@ The vehicle can be fully simulated in **Wokwi** or built with real hardware, and
 
 ---
 
+## 📁 Repository Directory Structure
+
+This repository contains all the essential elements of the ecosystem (circuit diagram, firmware code, and web dashboard client) to simulate and run the project:
+
+| File / Folder | Role / Description |
+| :--- | :--- |
+| 📝 **[README.md](README.md)** | This document. Provides the high-level project summary, features, and setup guides. |
+| 🔌 **[HARDWARE.md](HARDWARE.md)** | Detailed physical hardware wiring tables, parts inventory (BOM), and voltage divider safety calculations. |
+| 🖥️ **[index.html](index.html)** | Desktop control cockpit dashboard. Reads keyboard inputs, communicates via MQTT WebSockets, and displays visual telemetry gauges and graphs. |
+| 🧠 **[sketch.ino](sketch.ino)** | C++ Arduino firmware. Handles Wi-Fi connection, processes direction packets, operates motors, and samples sensors. |
+| 🌐 **[diagram.json](diagram.json)** | Schematic design containing component specs and wiring routes for the Wokwi online circuit simulator. |
+| 📚 **[libraries.txt](libraries.txt)** | Wokwi dependency file used to automatically download ArduinoJson and PubSubClient libraries. |
+| ⚙️ **[wokwi.toml](wokwi.toml)** | Configuration file pointing to compile assets for Wokwi CLI or runners. |
+
+---
+
+
 ## 📋 Project Architecture
 
 ```text
